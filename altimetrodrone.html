@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Altímetro neuronal para drone</title>
+<style>
+:root{--bg:#f3f6fb;--card:#fff;--tx:#14202e;--mut:#5b6b7e;--ac:#0b6fd6;--ac2:#e8590c;--bd:#d9e1ec;--s1:#8ccbff;--s2:#eaf6ff;--gr:#5c8a3c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0d1520;--card:#162233;--tx:#e8eef6;--mut:#93a4b8;--ac:#58a6ff;--ac2:#ff9a52;--bd:#263a52;--s1:#0f2a4a;--s2:#2a4d78;--gr:#3d6a2a}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0d1520;--card:#162233;--tx:#e8eef6;--mut:#93a4b8;--ac:#58a6ff;--ac2:#ff9a52;--bd:#263a52;--s1:#0f2a4a;--s2:#2a4d78;--gr:#3d6a2a}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:980px;margin:auto;padding:20px 16px 40px}
+h1{font-size:1.6rem;margin:0 0 4px}p.sub{color:var(--mut);margin:0 0 18px}
+.grid{display:grid;gap:16px;grid-template-columns:1fr 1fr}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px}
+h2{font-size:1rem;margin:0 0 10px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+label{display:block;font-weight:600;margin-top:10px}
+.row{display:flex;gap:10px;align-items:center}.row input[type=range]{flex:1;accent-color:var(--ac)}
+input[type=number]{width:96px;padding:6px 8px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.res{font-size:2.6rem;font-weight:700;color:var(--ac)}.res small{font-size:1rem;color:var(--mut);font-weight:400}
+.kv{display:flex;justify-content:space-between;border-top:1px solid var(--bd);padding:6px 0;color:var(--mut)}.kv b{color:var(--tx)}
+canvas{width:100%;height:150px;display:block}
+.bar{height:8px;background:var(--bd);border-radius:6px;overflow:hidden;margin:8px 0}.bar i{display:block;height:100%;width:0;background:var(--ac);transition:width .2s}
+.sky{position:relative;height:300px;border-radius:12px;overflow:hidden;background:linear-gradient(var(--s2),var(--s1))}
+.ground{position:absolute;left:0;right:0;bottom:0;height:22px;background:var(--gr)}
+.drone{position:absolute;left:50%;width:70px;margin-left:-35px;transition:bottom .5s ease}
+.tag{position:absolute;right:8px;font-size:.75rem;color:var(--mut)}
+.arch{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px}.arch span{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:4px 8px;font-size:.85rem}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;font:inherit;cursor:pointer;margin-top:10px}
+</style></head><body><main>
+<h1>Altímetro neuronal para drone</h1>
+<p class="sub">Una red neuronal (RNA) aprende a estimar la altura a partir de la temperatura y la presión atmosférica, sin que le demos la fórmula.</p>
+<div class="grid">
+ <section class="card"><h2>1. Entrenamiento de la RNA</h2>
+  <div class="arch"><span>Entrada: T, P</span>→<span>Densa 16 · ReLU</span>→<span>Densa 16 · ReLU</span>→<span>Salida: altura</span></div>
+  <div class="bar"><i id="pb"></i></div>
+  <div id="st" style="color:var(--mut)">Preparando datos…</div>
+  <canvas id="cv" width="460" height="150"></canvas>
+  <div class="kv"><span>Ejemplos de entrenamiento</span><b>2000</b></div>
+  <div class="kv"><span>Optimizador / pérdida</span><b>Adam (0.01) / MSE</b></div>
+  <div class="kv"><span>Error medio en prueba</span><b id="mae">—</b></div>
+  <button id="re">Reentrenar</button>
+ </section>
+ <section class="card"><h2>2. Simulador</h2>
+  <label for="t">Temperatura (°C)</label>
+  <div class="row"><input id="t" type="range" min="-10" max="40" step="0.5" value="15"><input id="tn" type="number" min="-10" max="40" step="0.5" value="15"></div>
+  <label for="p">Presión atmosférica (hPa)</label>
+  <div class="row"><input id="p" type="range" min="650" max="1050" step="1" value="900"><input id="pn" type="number" min="650" max="1050" step="1" value="900"></div>
+  <div style="margin-top:14px" class="res"><span id="h">—</span> <small>m (estimado por la RNA)</small></div>
+  <div class="kv"><span>Altura por fórmula barométrica</span><b id="hf">—</b></div>
+  <div class="kv"><span>Diferencia RNA − fórmula</span><b id="er">—</b></div>
+  <div class="kv"><span>Modelo en uso</span><b id="src">Entrenado en el navegador</b></div>
+  <label for="jf">Cargar modelo entrenado en Python (modelo_drone.json)</label>
+  <input id="jf" type="file" accept=".json,application/json" style="margin-top:6px"><div id="jm" style="color:var(--mut);font-size:.85rem"></div>
+ </section>
+ <section class="card" style="grid-column:1/-1"><h2>3. Vista del drone</h2>
+  <div class="sky"><span class="tag" style="bottom:28px">0 m</span><span class="tag" style="top:6px">3000 m</span>
+   <div class="drone" id="dr" style="bottom:22px"><svg viewBox="0 0 70 34"><g stroke="var(--tx)" stroke-width="3" stroke-linecap="round"><line x1="14" y1="14" x2="56" y2="14"/><line x1="14" y1="14" x2="14" y2="6"/><line x1="56" y1="14" x2="56" y2="6"/></g><rect x="26" y="12" width="18" height="12" rx="4" fill="var(--ac2)"/><g stroke="var(--tx)" stroke-width="3" stroke-linecap="round"><line x1="5" y1="5" x2="23" y2="5"/><line x1="47" y1="5" x2="65" y2="5"/></g></svg></div>
+   <div class="ground"></div></div>
+ </section>
+</div>
+<p class="sub" style="margin-top:16px">Los datos de entrenamiento se generan con la fórmula barométrica h = [(P₀/P)^(1/5.257) − 1]·(T + 273.15)/0.0065, con P₀ = 1013.25 hPa. Es un modelo didáctico: no reemplaza un altímetro real.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const F=(T,P)=>(Math.pow(1013.25/P,1/5.257)-1)*(T+273.15)/0.0065;
+const N=(T,P)=>[(T+10)/50,(P-650)/400];
+function sample(n){const X=[],Y=[];while(X.length<n){const T=-10+Math.random()*50,P=650+Math.random()*400,h=F(T,P);if(h<-100||h>3200)continue;X.push(N(T,P));Y.push([h/3000]);}return{X,Y}}
+let model,losses=[],ready=false;
+function draw(){const c=$('cv'),g=c.getContext('2d'),s=getComputedStyle(document.documentElement);g.clearRect(0,0,c.width,c.height);
+ if(losses.length<2)return;const mx=Math.max(...losses);g.strokeStyle=s.getPropertyValue('--ac');g.lineWidth=2;g.beginPath();
+ losses.forEach((l,i)=>{const x=10+i/(losses.length-1)*(c.width-20),y=c.height-10-(l/mx)*(c.height-24);i?g.lineTo(x,y):g.moveTo(x,y)});g.stroke();
+ g.fillStyle=s.getPropertyValue('--mut');g.font='12px system-ui';g.fillText('Pérdida (error) por época',12,14)}
+async function train(){
+ ready=false;losses=[];$('re').disabled=true;$('st').textContent='Entrenando…';
+ const d=sample(2000),xs=tf.tensor2d(d.X),ys=tf.tensor2d(d.Y);
+ model=tf.sequential({layers:[tf.layers.dense({units:16,activation:'relu',inputShape:[2]}),tf.layers.dense({units:16,activation:'relu'}),tf.layers.dense({units:1})]});
+ model.compile({optimizer:tf.train.adam(0.01),loss:'meanSquaredError'});
+ const E=120;
+ await model.fit(xs,ys,{epochs:E,batchSize:64,shuffle:true,callbacks:{onEpochEnd:async(e,l)=>{losses.push(l.loss);$('pb').style.width=((e+1)/E*100)+'%';$('st').textContent='Época '+(e+1)+' de '+E+' · pérdida '+l.loss.toExponential(2);draw();await tf.nextFrame()}}});
+ const t=sample(300),p=tf.tidy(()=>model.predict(tf.tensor2d(t.X)).dataSync());
+ let s=0;for(let i=0;i<300;i++)s+=Math.abs(p[i]-t.Y[i][0])*3000;
+ $('mae').textContent=(s/300).toFixed(1)+' m';$('st').textContent='Entrenamiento completo. Ya puedes simular.';
+ xs.dispose();ys.dispose();ready=true;$('re').disabled=false;update();
+}
+function update(){
+ const T=parseFloat($('tn').value),P=parseFloat($('pn').value);if((!ready&&!ext)||isNaN(T)||isNaN(P))return;
+ const h=(ext&&useExt)?fwd(N(T,P),ext):tf.tidy(()=>model.predict(tf.tensor2d([N(T,P)])).dataSync()[0]*3000),f=F(T,P);
+ $('h').textContent=h.toFixed(1);$('hf').textContent=f.toFixed(1)+' m';$('er').textContent=(h-f).toFixed(1)+' m';
+ $('dr').style.bottom=(22+Math.max(0,Math.min(1,h/3000))*230)+'px';
+}
+let ext=null,useExt=false;
+function fwd(x,m){let a=x;for(const L of m.layers){a=L.b.map((b,j)=>{let s=b;for(let i=0;i<a.length;i++)s+=a[i]*L.W[i][j];return L.act==='relu'?Math.max(0,s):s})}return a[0]*m.h_scale}
+$('jf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const m=JSON.parse(await f.text());if(!m.layers||!m.h_scale)throw 0;ext=m;useExt=true;$('src').textContent='Entrenado en Python (TensorFlow)';$('jm').textContent='Modelo cargado: '+f.name;update()}catch(_){$('jm').textContent='Archivo no válido. Usa el modelo_drone.json generado por el cuaderno.'}};
+function link(r,n){$(r).oninput=()=>{$(n).value=$(r).value;update()};$(n).oninput=()=>{$(r).value=$(n).value;update()}}
+link('t','tn');link('p','pn');$('re').onclick=train;
+matchMedia('(prefers-color-scheme:dark)').onchange=draw;
+tf.ready().then(train);
+</script></body></html>
